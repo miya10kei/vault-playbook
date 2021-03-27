@@ -1,0 +1,7 @@
+---
+arch: arm64
+hostname: "{{ ansible_facts.hostname }}"
+node_ip: "{{ ansible_facts.wlan0.ipv4.address }}"
+raft_dir: /opt/raft
+vault_owner: vault
+vault_group: vault

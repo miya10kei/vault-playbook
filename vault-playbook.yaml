@@ -1,0 +1,9 @@
+---
+- name: Construct HashiCorp Vault Cluster
+  hosts: vault_cluster
+  become: true
+  roles:
+    - role: vault
+      tags:
+        - vault
+

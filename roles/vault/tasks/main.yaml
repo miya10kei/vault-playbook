@@ -1,0 +1,79 @@
+---
+- name: Check if a vault exists
+  stat:
+    path: /usr/local/bin/vault
+  register: vault_register
+
+- when: not vault_register.stat.exists
+  block:
+    - name: Install unzip
+      apt:
+        name:
+          - unzip
+        state: latest
+        update_cache: true
+        autoclean: yes
+
+    - name: Create temporary directory
+      tempfile:
+        state: directory
+      register: remote_tmp
+
+    - name: Download vault
+      unarchive:
+        src: https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_{{ arch }}.zip
+        dest: "{{ remote_tmp.path }}"
+        remote_src: True
+
+    - name: Copy vault binary
+      copy:
+        src: "{{ remote_tmp.path }}/vault"
+        dest: /usr/local/bin
+        remote_src: True
+        mode: 0755
+
+    - name: Set cap_ipc_lock on vault
+      community.general.capabilities:
+        path: /usr/local/bin/vault
+        capability: cap_ipc_lock+ep
+        state: present
+
+- name: Create user
+  user:
+    name: "{{ vault_owner }}"
+    group: "{{ vault_group }}"
+    system: true
+    shell: /bin/false
+    home: /etc/vault.d
+
+- name: Configure vault.service and Copy it to remote
+  template:
+    src: vault.service.j2
+    dest: /etc/systemd/system/vault.service
+    mode: 0644
+
+- name: Configure vault.hcl and Copy it to remote
+  template:
+    src: vault.hcl.j2
+    dest: /etc/vault.d/vault.hcl
+    owner: "{{ vault_owner }}"
+    group: "{{ vault_group }}"
+    mode: 0640
+
+- name: Create data directory
+  file:
+    path: "{{ raft_dir }}"
+    state: directory
+    owner: "{{ vault_owner }}"
+    group: "{{ vault_group }}"
+
+- name: Run vault service
+  systemd:
+    name: vault
+    state: restarted
+    enabled: true
+  register: result
+
+- name: Verify vault service
+  service_facts:
+  failed_when: ansible_facts.services["vault.service"].state != "running"
